@@ -1,1 +1,18 @@
-大作业选题：文献阅读与翻译，DNS [Security Issues with DNS](papers/Security Issues with DNS.pdf)
+# 大作业选题：
+
+
+## 研发与实验
+
+### HTTPS协议中间人攻击的可能性探究与实验
+
+- DNS查询泄漏（经由DNS解析服务器）与MITM
+- ARP欺骗与MITM
+- 伪造证书
+- 合法证书签名
+- WPAD中间人劫持
+### 小组成员
+- yang5220
+- cloud0606
+
+
+    
