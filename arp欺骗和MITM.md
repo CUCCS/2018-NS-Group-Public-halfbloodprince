@@ -4,30 +4,74 @@
 - 功能：通过网络地址来解析MAC地址
 - 原理:
     - 装有TCP/IP协议的计算机和路由器都维护一个ARP缓存表，一段时间如果某个表项没有被使用即被删除，以减小ARP表长度
-    - 在主机发送数据使，先在arp缓存表中寻找是否有目标IP地址，若未找到就发送ARP request，目标MAC地址填为 ff:ff:ff:ff:ff:ff，在子网内进行广播。此时只有ip地址为目标ip的主机做出响应，给发起询问的主机回复ARP response
-    - Gratuitous ARP也称为免费ARP，无故ARP。 Gratuitous ARP是 一种特殊的arp请求，是在主机启动的时候请求自己ip地址的mac地址。用于确定该ip是否已被占用，也可用于更新arp表
+
+    - 在主机发送数据使，先在ARP缓存表中寻找是否有目标IP地址，若未找到就发送ARP request，目标MAC地址填为 ff:ff:ff:ff:ff:ff，在子网内进行广播。此时只有ip地址为目标ip的主机做出响应，给发起询问的主机回复ARP response
+
+    - Gratuitous ARP ：无故arp，当设备配置了静态ip地址或者通过dchp获取ip地址之后发起
+
+         作用:
+
+         1. 检查重复地址和ip地址冲突
+         2. 通告一个新的数据链路标识，设备收到ARP请求时，若ARP缓存中已有发送者ip地址，则更新对应的MAC地址条目
+
+
 
 ### 2. ARP欺骗
-- 原理：攻击者构造假的ARP数据包发送给靶机，宣称网关ip地址对应的mac地址为攻击者自己的mac地址，使得靶机arp表中存在错误的的表项，此后靶机发送至网关的数据包就会直接发送到攻击者主机上。此时便阻断了靶机与网关的通信。如果攻击同时对网关进行arp欺骗，则可以在网关和靶机正常通信的情况下，获得所有通信流量。
 
-- 防制方法
-    1. 最理想的方法是网络内的每台计算机的ARP一律改用静态的方式，但是在大型的网络中不可行的，因为需要经常更新每台计算机的ARP表。
-    2. 网络设备可借由DHCP保留网络上各计算机的MAC地址，例如DHCP snooping
-        - 交换机上配置dhcp snooping，将交换机上端口设置为信任和非信任状态，交换机只转发信任端口的 DHCP OFFER/ACK/NAK报文（DISCOVER报文正常转发）
-        -  DHCP Snooping 还会监听经过本机的 DHCP 数据包并生成 DHCP Binding Table 记录表，一条记录包括 IP、MAC、租约时间、端口、VLAN、类型等信息，结合 DAI(Dynamic ARP Inspection)和 IPSG(IP Source Guard)可实现ARP防欺骗和IP流量控制功能。
-- 用途
-    - ARP欺骗亦有正当用途。其一是在一个需要登录的网络中，让未登录的计算机将其浏览网页强制转向到登录页面，以便登录后才可使用网络。另外有些设有备援机制的网络设备或服务器，亦需要利用ARP欺骗以在设备出现故障时将讯务导到备用的设备上。
+- 原理：攻击者构造假的ARP数据包发送给靶机，宣称网关ip地址对应的mac地址为攻击者自己的mac地址，使得靶机ARP表中存在错误的的表项，此后靶机发送至网关的数据包就会直接发送到攻击者主机上。此时便阻断了靶机与网关的通信。如果攻击同时对网关进行ARP欺骗，则可以在网关和靶机正常通信的情况下，获得所有通信流量。
+
+- 防制方法：
+
+    - 终端用户角度：
+
+      - 安装桌面型防火墙
+      - 配置静态的ARP表
+      - 敏感数据加密后在传输并使用加密通信协议
+
+    - 网络管理员角度：
+
+      - 交换机端口安全机制
+
+        DAI(Dynamic ARP Inspection)技术:根据DAI检测表检测交换机每个端口的接收到的arp回应包,若违规则丢弃此数据包.DIA检测表的获取有两种方式:
+
+        1. 手工静态绑定
+        2. 在交换机上开启DHCP snooping，当用户第一次通过DHCP获取到地址的时候，交换机就把用户电脑的IP、MAC、Port信息记录在DHCP侦听表，后面ARP检测直接调用这张DHCP侦听表即可。
+
+        > In the Cisco IOS realm, note that other switch security services such as IP source guard and dynamic ARP inspection will use the DHCP snooping database, although it is possible to configure IPSG and DAI to function using static entries.
+
+      - 通过划分更小的 VLAN 来限制 ARP 欺骗的影响范围，极端情况下就是每个局域网主机相互均不可见：每个主机只有互联网访问权限、ARP 广播只能网关收到，无法影响到局域网内其他主机
+
 
 ## 实验
-### 网络拓扑
+
+### 1. 查看Gratuitous ARP
+
+- 分析pcapr.net中一[样本包](http://www.pcapr.net/view/ankitshakya007/2014/1/5/15/arp_gratuitous.pcap.html)，其中仅有一个无故ARP包，包中将自己的ip地址作为目标ip地址，用于宣告自己即将使用某个 IP-MAC 地址对。如有主机提出反对，就会回应一个目标主机是 GARP 发送者 MAC 地址的 GARP-reply 包，告知 GARP 发送者这个 IP 我已经在使用了，你再使用就会引起 IP 地址冲突，该样本包中未体现。
+
+	![](image/20181228-1.png)
+  
+- 尝试直接抓包分析观察：使用wireshark在局域网内抓包，过滤条件设置为`arp.isgratuitous == 1`, 结果和样本包类似
+  ​    	 	
+    ![](image/20181228-2.png)
+
+- 由于在上述两次抓包中都没有发现无故arp的回复包，所以在pcapr上找了[样本包2](http://pcapr.net/view/bwilkerson/2008/10/3/12/dot1q.pcap.html)观察，可发现出现ip冲突时，原ip使用者会回复无故ARP发送者，包中发送方和接受方ip相同。
+
+    ![](image/20181228-3.png)
+
+### 2. 使用arpspoof实现中间人攻击
+
+- 网络拓扑
+
 ![](image/20181206-20.png)
-### 1. 使用arpspoof
+
 - 连通性测试
 
     ![](image/20181206-1.png)
-- 查看arp表
+- 查看ARP表
 
     ![](image/20181206-3.png)
+
+#### 引流阶段
 - 在Attacker执行 `arpspoof -i eth0 -t 192.168.0.2 192.168.0.254`对对靶机进行arp投毒
 
     ![](image/20181206-4.png)
@@ -42,6 +86,8 @@
 
     ![](image/20181206-9.png)
 
+#### 获取通讯负载
+
 - 在主机端使用wireshark抓包，然后在靶机尝试登录学校网站，显示登录异常
 
     ![](image/20181206-10.png)
@@ -50,7 +96,21 @@
 
     ![](image/20181206-13.png)
 
-### 2. 使用ettercap
+- 对登录异常原因进行探究
+
+  - 在靶机未被arp投毒前尝试登录，发现仍然出现登录异常，查看http状态码为302（ Moved Temporarily ）
+  ![](image/20181229-1.png)
+  	
+  - 在宿主机上尝试访问学校官网登录也出现登录异常，所以此处登录入口应该是已经弃用了，这个测试点选择的不是很好
+
+  	![](image/20181229-2.png)
+  	
+  	![](image/20181229-3.png)
+
+
+
+### 3. 使用ettercap实现中间人攻击
+
 网络拓扑和arpspoof一致，ettercap也实现了同样的效果
 - kali直接搜索ettercap
 
@@ -75,7 +135,8 @@
 
 ## 参考
 - [Man In The Middle Attack! (ARP Poisoning) using ettercap to sniff login information](https://www.youtube.com/watch?v=0a7o9FKzWOc)
-
 - [Arpspoof工具](https://wizardforcel.gitbooks.io/daxueba-kali-linux-tutorial/content/58.html)
 - [ARP欺骗](https://zh.wikipedia.org/wiki/ARP%E6%AC%BA%E9%A8%99)
 - [DHCP_snooping](https://zh.wikipedia.org/wiki/DHCP_snooping)
+- [five-things-to-know-about-dhcp-snooping](https://packetpushers.net/five-things-to-know-about-dhcp-snooping/)
+- [图解ARP协议（三）ARP防御篇-如何揪出"内鬼"并"优雅的还手"-知乎](https://zhuanlan.zhihu.com/p/28865553)
