@@ -107,7 +107,33 @@
   	
   	![](image/20181229-3.png)
 
+- 尝试攻击者通过重发Cookie实现实现靶机账户登录（由于上述登录入口不可用，下面选择使用登录教务在线）
 
+    - 主机端开启wireshark抓包
+
+    ![](image/20181229-7.png)
+
+    - 靶机登录教务在线
+
+    ![](image/20181229-4.png)
+    
+    - 主机中选择一http包，右键选择Follow->TCP stream，拷贝Cookie
+
+    ![](image/20181229-8.png)
+
+    - 使用firefox插件 simple modify headers，设置自动更改cookie选项，点击start
+
+    ![](image/20181229-5.png)
+
+    - 刷新教务在线页面，没有成功登入
+
+      排错：
+
+      - 查看了Network发现已经把Cookie更改为我设置的Cookie，所以插件功能应该没有问题
+
+        ![](image/20181229-6.png)
+
+	  - 结合老师上课给出的实验视频和之前同学成功重发cookie的实验报告，用相同方法还尝试了登录qq邮箱，新浪微博，并且在过滤包时用的过滤条件为`http.cookie contains qq`格式，还是没有成功登入
 
 ### 3. 使用ettercap实现中间人攻击
 
