@@ -49,12 +49,12 @@
 
 
     - LLMNR名称解析过程
-
+    
         ![](image/LLMNR_1.png)
-
+    
     - 缺陷
         1. 整个过程走UDP协议，主机A根本不知道它得到的IP是不是它想要解析的主机的IP地址
-
+    
         2. 无论局域网中存不存在主机B，只要主机A请求主机B，都会进行一次LLMNR解析过程
 
 - NBNS 查询(LLMNR查询失败)
@@ -74,65 +74,141 @@
 ### 顺序
     DNS >= LLMNR >= NBNS
 
-## WPAD劫持实验(未成功)
-
-### 工具 ：metaspliot  framework
-
+## WPAD劫持实验
 ### 实验环境
 
-- 攻击者  kali IP : 10.0.2.22
+- 虚拟机:virtual box 5.2.18 r124319
+  - 攻击者:4.17.0-kali1-amd64
 
-- 靶机  win7  IP : 10.0.2.20
+  - 靶机:Windows 7
 
-    - 开启自动检测设置
+### 实验流程
 
-    ![](image/auto_detect.png)
+#### 网络拓扑
 
-### 监听NBNS查询
+![](image/20180104-28.png)
 
-![](image/monit_nbns.png)
+####  1. 在Attacker污染NBNS查询
 
-### 设置WPAD服务器
+- 进入metasploit控制台
+    ```
+    service postgresql start
+    msfconsole
+    ```
+    ![](image/20180104-1.png)
 
-![](image/wpad_server.png)
+- 监听NBNS查询
+    ```
+    use auxiliary/spoof/nbns/nbns_response 
+    set regex WPAD 
+    set spoofip 10.0.2.5
+    run
+    ```
+    ![](image/20180104-2.png)	
 
-### 靶机查询WPAD
+- 设置WPAD服务器
+    ```
+    use auxiliary/server/wpad 
+    set proxy 10.0.2.5 
+    run
+    ```
+    ![](image/20180104-3.png)
 
-- 会产生NBNS广播
+#### 2. 在Attacker使用Burp Suite开启代理服务
 
-### wireshark抓包分析
+- Proxy->Options设置如下图所示的代理，不选择loopback only
+  
+    ![](image/20180104-19.png)
+  
+- Proxy->Intercept关闭Intercecpt按钮
 
-- 靶机广播NBNS
+    ![](image/20180104-18.png)
 
-    ![](image/find_wpad.png)
+#### 3. 在Victim访问互联网
+- 攻击前能正常访问http://sec.cuc.edu.cn
 
-- 攻击主机“回复”
+  ![](image/20180104-5.png)
 
-    ![](image/attack_response.png)
+  攻击前能正常访问https://sec.cuc.edu.cn
 
-- 靶机从攻击主机回复的IP处请求下载PAC文件
+  ![](image/20180104-7.png)
 
-    ![](image/request_pac.png)
+  原始证书信息如下
 
-    - request URI 处为空白，未能获得PAC文件的地址,目标端口并没有错
+  ![](image/20180104-6.png)
 
-- 攻击主机PAC文件
+- 在Internet 选项中确保勾选自动检测设置
 
-    ![](image/response_pac.png)
+ 	![](image/20180104-27.png)
 
+- 攻击后访问http://sec.cuc.edu.cn提示证书有问题
 
-    
+  ![](image/20180104-12.png)
 
-    
+- 把http改为https后整个页面都提示证书有问题，选择继续浏览此网站
 
+  ![](image/20180104-14.png)
 
+- 继续浏览可见地址栏提示证书错误
 
+  ![](image/20180104-15.png)
 
+- 查看证书如下，原来的证书已被替换
 
+  ![](image/20180104-16.png)
 
+- 访问百度效果类似
+  - 提示证书有问题，选择继续浏览此网站
 
+  ![](image/20180104-9.png)
 
+  - 地址栏处显示证书错误
 
-    
+  ![](image/20180104-10.png)
 
+  - 证书如下
+
+  ![](image/20180104-11.png)
+
+#### 4. 在Attacker查看截获流量并分析抓包结果
+
+- 首先在Burp Suite中可以看到所有靶机访问产生的流量，可进行进一步利用
+
+	![](image/20180104-20.png)
+	
+	![](image/20180104-21.png)
+
+主机在靶机访问网络前已经开始抓包
+
+- 靶机NBNS广播包
+
+	![](image/20180104-26.png)
+
+- 攻击者主机对靶机NBNS广播的回复包
+
+	![](image/20180104-22.png)
+	
+- 靶机向攻击者请求PAC文件
+
+	![](image/20180104-23.png)
+	
+- 攻击者回复的PAC文件
+
+	![](image/20180104-24.png)
+
+#### 错误分析
+
+- 刚开始自己构建了PAC文件，在本地/var/www/html/路径下创建了文件wpad.dat,内容如下，Burp Suite也配置了10.0.2.5:1080的代理，但是靶机上不了网
+
+  ![](image/20180104-25.png)
+
+  然后抓包发现攻击者主机回复的PAC文件不是我提前编辑好的wpad.dat，而是回复了 [本机IP:8080] 作为代理服务器地址,如下图，所以猜想metasploit framework应该是自动回复了wpad.dat,所以在实验中直接改了Burp Suite代理的端口为8080继续实验
+
+	![](image/20180104-24.png)
+
+## 参考
+
+- [基于WPAD的中间人攻击](https://juejin.im/post/5aa11887518825558a062dcf)
+- [starting-metasploit-framework-in-kali](https://docs.kali.org/general-use/starting-metasploit-framework-in-kali)
+- [Using WPAD to Compromise Web Browsers / How To Protect Yourself at Starbucks!](https://www.youtube.com/watch?v=1ab8vBjUr6I)
 
